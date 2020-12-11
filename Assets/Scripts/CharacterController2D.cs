@@ -2,6 +2,64 @@
 using UnityEngine.Events;
 using System;
 
+[Serializable]
+public class Timer
+{
+  public float time { get; set; }
+  private float timer = 0;
+  private Action onFinish;
+  public bool isRunning = false;
+
+  public Timer(float time, Action onFinish)
+  {
+    this.time = time;
+    this.onFinish = onFinish;
+  }
+
+  public Timer(float time)
+  {
+    this.time = time;
+  }
+
+  public void Start()
+  {
+    this.timer = time;
+    this.isRunning = true;
+  }
+
+  public void Pause()
+  {
+    this.isRunning = false;
+  }
+
+  public void Resume()
+  {
+    this.isRunning = true;
+  }
+
+  public void Stop()
+  {
+    this.timer = 0;
+    this.isRunning = false;
+  }
+
+  public void Update()
+  {
+    if (this.isRunning)
+    {
+      if (this.timer > 0f)
+      {
+        this.timer -= Time.deltaTime;
+      }
+      if (this.timer <= 0f)
+      {
+        this.onFinish?.Invoke();
+        this.isRunning = false;
+      }
+    }
+  }
+}
+
 public class CharacterController2D : MonoBehaviour
 {
   public enum State { Grounded, Airborne, Wallsliding, Dashing }
@@ -10,37 +68,40 @@ public class CharacterController2D : MonoBehaviour
 
   [Header("Movement")]
   public float speed = 35f;
-  [Range(0, 1)] [SerializeField] private float m_CrouchSpeed = .36f;      // Amount of maxSpeed applied to crouching movement. 1 = 100%
+  [Range(0, 1)] [SerializeField] private float m_CrouchSpeed = .36f;          // Amount of maxSpeed applied to crouching movement. 1 = 100%
   [Range(0, .3f)] [SerializeField] private float m_MovementSmoothing = .05f;  // How much to smooth out the movement
-  [SerializeField] private bool m_AirControl = false;             // Whether or not a player can steer while jumping;
-  [SerializeField] private LayerMask m_WhatIsGround;              // A mask determining what is ground to the character
-  [SerializeField] private Transform m_GroundCheck;             // A position marking where to check if the player is grounded.
-  [SerializeField] private Transform m_CeilingCheck;              // A position marking where to check for ceilings
-  [SerializeField] private Collider2D m_CrouchDisableCollider;        // A collider that will be disabled when crouching
+  [SerializeField] private bool m_AirControl = false;                         // Whether or not a player can steer while jumping;
+  [SerializeField] private LayerMask m_WhatIsGround;                          // A mask determining what is ground to the character
+  [SerializeField] private LayerMask m_WhatIsObject;                          // A mask determining what is an interactable object to the character
+  [SerializeField] private Transform m_GroundCheck;                           // A position marking where to check if the player is grounded.
+  [SerializeField] private Transform m_CeilingCheck;                          // A position marking where to check for ceilings
+  [SerializeField] private Collider2D m_CrouchDisableCollider;                // A collider that will be disabled when crouching
   public float hangtime = 0.2f;
   private float hangTimer = 0;
   public float gravityScale = 3f;
   private bool isDashing = false;
   [SerializeField] private float dashForce = 100f;
   private float dashTimer = 0;
-  [SerializeField] private float dashTime = 0.5f; // how long should the dash last
+  [SerializeField] private float dashTime = 0.5f;                             // how long should the dash last
+  public GameObject currentObject;
+  public FixedJoint2D grabJoint;
 
   // input flags
-  private bool isJumping = false;
-  private bool isCrouching = false;
-  private bool isGrabbing = false;
+  public bool isJumping = false;
+  public bool isCrouching = false;
+  public bool isGrabbing = false;
 
   [Header("Jumping")]
-  [SerializeField] private float jumpForce = 600f;              // Amount of force added when the player jumps.
-  [Range(0, 1)] [SerializeField] private float shortHopFactor = 0.5f;              // Amount of force added when the player jumps.
-  public float shortHopTime = 0.2f; // anything over this time is considered a long jump
-  private float shortHopTimer = 0f;
+  [SerializeField] private float jumpForce = 600f;                            // Amount of force added when the player jumps.
+  [Range(0, 1)] [SerializeField] private float shortHopFactor = 0.5f;         // Factor reducing the players jump height on a short hop
+  public float shortHopTime = 0.2f;                                           // Anything over this time is considered a long jump
+  public Timer shortHopTimer;
   public int numberOfJumps = 1;
   public int jumpsUsed = 0;
   public float timeBetweenJumps = 0.2f;
   private float jumpTimer = 0f;
-  public float jumpBuffer = 0.3f;
-  private float jumpBufferCounter = 0f;
+  public float jumpBuffer = 0.3f;                                             // the amount of lee-way given on a jump button press
+  private Timer jumpBufferTimer; 
   private bool jumpButtonUp = false;
 
   [Header("Wall Sliding")]
@@ -49,6 +110,8 @@ public class CharacterController2D : MonoBehaviour
   [SerializeField] private Transform m_WallCheck;             // A position marking where to check if the player is grounded.
   [Range(0, 1)] [SerializeField] private float m_WallslidingSpeed = 0.75f;      // Amount of maxSpeed applied to crouching movement. 1 = 100%
   [SerializeField] private bool noGravityOnHang = false;
+  [SerializeField] private float wallJumpTime = 0.2f; // the amount of time after a wall jump that you can't move the player
+  private Timer wallJumpTimer; // While running, you can't control the player
 
   [Header("Effects")]
   public ParticleSystem footsteps;
@@ -75,11 +138,14 @@ public class CharacterController2D : MonoBehaviour
 
 
   private float horizontalMovement = 0f;
+  private bool isPushing;
 
   private void Awake()
   {
     m_Animator = this.GetComponent<Animator>();
     m_Rigidbody2D = GetComponent<Rigidbody2D>();
+    grabJoint = this.GetComponent<FixedJoint2D>();
+
     m_Rigidbody2D.gravityScale = this.gravityScale;
     if (OnLandEvent == null)
       OnLandEvent = new UnityEvent();
@@ -87,41 +153,26 @@ public class CharacterController2D : MonoBehaviour
       OnCrouchEvent = new BoolEvent();
     if (OnFallEvent == null)
       OnFallEvent = new UnityEvent();
+
+    wallJumpTimer = new Timer(wallJumpTime);
+    jumpBufferTimer = new Timer(jumpBuffer);
+    shortHopTimer = new Timer(shortHopTime);
   }
 
   private void Update()
   {
     horizontalMovement = Input.GetAxisRaw("Horizontal") * speed;
-    if (Input.GetButton("Jump"))
-    {
-      shortHopTimer += Time.deltaTime;
-    }
 
     if (Input.GetButtonUp("Jump")) {
       jumpButtonUp = true;
-    } else
-    {
-      jumpButtonUp = false;
     }
 
     if (Input.GetButtonDown("Jump"))
     {
-      shortHopTimer = 0f;
-      jumpBufferCounter = jumpBuffer;
-    }
-    else
-    {
-      jumpBufferCounter -= Time.deltaTime;
+      jumpBufferTimer.Start();
     }
 
-    if (jumpBufferCounter > 0f)
-    {
-      isJumping = true;
-    }
-    else
-    {
-      isJumping = false;
-    }
+    isJumping = jumpBufferTimer.isRunning;
 
     if (Input.GetButtonDown("Crouch"))
     {
@@ -146,6 +197,7 @@ public class CharacterController2D : MonoBehaviour
     }
 
     this.Animate();
+    this.Timers();
   }
 
   private void FixedUpdate()
@@ -168,6 +220,7 @@ public class CharacterController2D : MonoBehaviour
     }
     isDashing = false;
     isJumping = false;
+    jumpButtonUp = false;
   }
 
   // Sets the state of the player
@@ -175,6 +228,7 @@ public class CharacterController2D : MonoBehaviour
   {
     CheckGround();
     CheckWall();
+    GrabObject();
   }
 
   private void CheckGround()
@@ -228,6 +282,32 @@ public class CharacterController2D : MonoBehaviour
     }
   }
 
+  private void GrabObject()
+  {
+    Collider2D collider = Physics2D.OverlapCircle(m_WallCheck.position, k_GroundedRadius, m_WhatIsObject);
+    if (collider && collider.gameObject != this.gameObject)
+    {
+      // touching something 
+      isPushing = true;
+      if (isGrabbing)
+      {
+        FixedJoint2D objectJoint = collider.gameObject.GetComponent<FixedJoint2D>();
+        objectJoint.enabled = true;
+        objectJoint.connectedBody = m_Rigidbody2D;
+        currentObject = collider.gameObject;
+      } else if (currentObject != null)
+      {
+        FixedJoint2D objectJoint = currentObject.GetComponent<FixedJoint2D>();
+        objectJoint.enabled = false;
+        objectJoint.connectedBody = null;
+        currentObject = null;
+      }
+    } else
+    {
+      isPushing = false;
+    }
+  }
+
   public void Move(float move, bool crouch, bool jump, bool grab, bool dash)
   {
     // If crouching, check to see if the character can stand up
@@ -240,10 +320,73 @@ public class CharacterController2D : MonoBehaviour
       }
     }
 
+    this.Movement(move, crouch);
+    m_Rigidbody2D.gravityScale = this.gravityScale;
+    switch (controllerState)
+    {
+      case State.Grounded:
+        hangTimer = hangtime;
+        jumpTimer -= Time.fixedDeltaTime;
+        jumpsUsed = 0;
+        if (jump)
+        {
+          this.Jump();
+        }
+        if (dash)
+        {
+          this.Dash();
+        }
+        break;
+      case State.Airborne:
+        hangTimer -= Time.fixedDeltaTime;
+        jumpTimer -= Time.fixedDeltaTime;
+        if (jump && (jumpsUsed < numberOfJumps) && (jumpTimer < 0f))
+        {
+          if (jumpsUsed == 0 && hangTimer > 0f) // first jump
+          {
+            this.CoyoteJump();
+          } else if (jumpsUsed > 0) // double jump
+          {
+            this.Jump();
+          }
+        }
+        if (jumpButtonUp && shortHopTimer.isRunning && m_Rigidbody2D.velocity.y > 0 && jumpsUsed > 0) // still jumping
+        {
+          this.m_Rigidbody2D.velocity = new Vector2(m_Rigidbody2D.velocity.x, m_Rigidbody2D.velocity.y * shortHopFactor);
+          shortHopTimer.Stop();
+        }
+        if (dash)
+        {
+          this.Dash();
+        }
+        break;
+      case State.Wallsliding:
+        hangTimer = hangtime;
+        jumpsUsed = 0;
+        if (jump && !wallJumpTimer.isRunning)
+        {
+          this.WallJump();
+        } else if(grab)
+        {
+          // slow the character on the wall
+          m_Rigidbody2D.velocity = new Vector2(m_Rigidbody2D.velocity.x, m_Rigidbody2D.velocity.y * m_WallslidingSpeed);
+          if (noGravityOnHang) m_Rigidbody2D.gravityScale = 0f;
+        }
+        //wallJumpTimer.Stop(); // in the air so reset the timer
+        break;
+    }
+  }
+
+  private void Movement(float move, bool crouch)
+  {
+    if (wallJumpTimer.isRunning)
+    {
+      return;
+    }
+
     //only control the player if grounded or airControl is turned on
     if (controllerState == State.Grounded || m_AirControl)
     {
-
       // If crouching
       if (crouch)
       {
@@ -279,96 +422,55 @@ public class CharacterController2D : MonoBehaviour
       m_Rigidbody2D.velocity = Vector3.SmoothDamp(m_Rigidbody2D.velocity, targetVelocity, ref m_Velocity, m_MovementSmoothing);
 
       // If the input is moving the player right and the player is facing left...
-      if (move > 0 && !m_FacingRight)
+      if (move > 0 && !m_FacingRight && currentObject == null)
       {
         // ... flip the player.
         Flip();
       }
       // Otherwise if the input is moving the player left and the player is facing right...
-      else if (move < 0 && m_FacingRight)
+      else if (move < 0 && m_FacingRight && currentObject == null)
       {
         // ... flip the player.
         Flip();
       }
     }
+  }
 
-    m_Rigidbody2D.gravityScale = this.gravityScale;
-    switch (controllerState)
+  private void _Jump(Vector2 speed, bool addForce)
+  {
+    this.controllerState = State.Airborne;
+    jumpsUsed++;
+    jumpTimer = timeBetweenJumps;
+    hangTimer = 0;
+    shortHopTimer.Start();
+    this.CreateDust();
+    if (addForce)
     {
-      case State.Grounded:
-        hangTimer = hangtime;
-        jumpTimer -= Time.fixedDeltaTime;
-        jumpsUsed = 0;
-        if (jump)
-        {
-          this.Jump();
-        }
-        if (dash)
-        {
-          this.Dash();
-        }
-        break;
-      case State.Airborne:
-        hangTimer -= Time.fixedDeltaTime;
-        jumpTimer -= Time.fixedDeltaTime;
-        if (jump && (jumpsUsed < numberOfJumps) && (jumpTimer < 0f))
-        {
-          if (jumpsUsed == 0 && hangTimer > 0f) // first jump
-          {
-            this.Jump();
-          } else if (jumpsUsed > 0) // double jump
-          {
-            this.Jump();
-          }
-        }
-        if (jumpButtonUp && (shortHopTimer < shortHopTime) && m_Rigidbody2D.velocity.y > 0) // still jumping
-        {
-          this.m_Rigidbody2D.velocity = new Vector2(m_Rigidbody2D.velocity.x, m_Rigidbody2D.velocity.y * shortHopFactor);
-        }
-        if (dash)
-        {
-          this.Dash();
-        }
-        break;
-      case State.Wallsliding:
-        hangTimer = hangtime;
-        jumpsUsed = 0;
-        if (jump)
-        {
-          this.WallJump();
-        } else if(grab)
-        {
-          // slow the character on the wall
-          m_Rigidbody2D.velocity = new Vector2(m_Rigidbody2D.velocity.x, m_Rigidbody2D.velocity.y * m_WallslidingSpeed);
-          if (noGravityOnHang) m_Rigidbody2D.gravityScale = 0f;
-        }
-        break;
+      m_Rigidbody2D.AddForce(speed, ForceMode2D.Impulse);
+    } else
+    {
+      m_Rigidbody2D.velocity = speed;
     }
+    OnJumpEvent.Invoke();
   }
 
   private void Jump()
   {
-    this.controllerState = State.Airborne;
-    // Add a vertical force to the player.
-    m_Rigidbody2D.AddForce(new Vector2(0f, jumpForce), ForceMode2D.Impulse);
-    //m_Rigidbody2D.velocity = new Vector2(m_Rigidbody2D.velocity.x, this.jumpSpeed);
-    jumpsUsed++;
-    jumpTimer = timeBetweenJumps;
-    hangTimer = 0;
-    jumpBufferCounter = 0;
-    this.CreateDust();
-    OnJumpEvent.Invoke();
+    jumpBufferTimer.Stop();
+    this._Jump(new Vector2(0f, jumpForce), true);
+  }
+
+  private void CoyoteJump()
+  {
+    jumpBufferTimer.Stop();
+    this._Jump(new Vector2(m_Rigidbody2D.velocity.x, jumpForce), false);
   }
 
   private void WallJump()
   {
-    this.controllerState = State.Airborne;
     this.Flip();
-    jumpsUsed++;
-    jumpTimer = timeBetweenJumps;
-    hangTimer = 0;
-    this.CreateDust();
-    this.m_Rigidbody2D.AddForce(new Vector2(this.wallJumpSpeed * (m_FacingRight ? 1 : -1), this.wallJumpSpeed), ForceMode2D.Impulse); // kick off the wall in the opposite direction
+    wallJumpTimer.Start();
+    this._Jump(new Vector2(this.wallJumpSpeed * (m_FacingRight ? 1 : -1), this.wallJumpSpeed), false);
   }
 
   private void Dash()
@@ -408,9 +510,18 @@ public class CharacterController2D : MonoBehaviour
     switch(this.controllerState)
     {
       case State.Grounded:
-        if (Math.Abs(horizontalMovement) > 0)
+        if (isGrabbing && currentObject != null)
         {
-          m_Animator.Play("Run");
+          m_Animator.Play("Push");
+        } else if (Math.Abs(horizontalMovement) > 0)
+        {
+          if (isPushing)
+          {
+            m_Animator.Play("Push");
+          } else
+          {
+            m_Animator.Play("Run");
+          }
         } else
         {
           m_Animator.Play("Idle");
@@ -419,10 +530,10 @@ public class CharacterController2D : MonoBehaviour
       case State.Airborne:
         if (isFalling)
         {
-          m_Animator.Play("Jump");
+          m_Animator.Play("Fall");
         } else
         {
-          m_Animator.Play("Fall");
+          m_Animator.Play("Jump");
         }
         break;
       case State.Wallsliding:
@@ -442,8 +553,17 @@ public class CharacterController2D : MonoBehaviour
         break;
     }
   }
+
   private void CreateDust()
   {
     footsteps.Play();
+  }
+
+  // Timers that should be decremented every frame
+  private void Timers()
+  {
+    wallJumpTimer.Update();
+    jumpBufferTimer.Update();
+    shortHopTimer.Update();
   }
 }

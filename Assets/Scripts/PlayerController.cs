@@ -1,107 +1,49 @@
 ﻿using UnityEngine;
 using System.Collections;
-using UnityEngine.UI;
+using System;
 
-public class PlayerController : MonoBehaviour
+namespace Assets.Scripts
 {
-
-  // Movement
-  public float speed = 10f;
-  public float jumpForce = 3f;
-  new public Rigidbody2D rigidbody;
-  Vector2 m_Velocity = Vector2.zero;
-  private float movement = 0f;
-  private float verticalMovement = 0f;
-  private float m_MovementSmoothing = 0.05f;
-  private bool facingRight = true;
-  private bool isClimbing = false;
-  public float gravityScale = 3f;
-
-  // Tools and Devices
-  //public Laptop laptop;
-  //public Scanner scanner;
-  public float scannerRange = 10f;
-
-  // Use this for initialization
-  void Start()
+  public class PlayerController : MonoBehaviour 
   {
-    rigidbody = this.GetComponent<Rigidbody2D>();
-    rigidbody.gravityScale = this.gravityScale;
-  }
+    public Vector2 respawnPoint;
+    public Cinemachine.CinemachineVirtualCameraBase cinemachine;
+    private CharacterController2D controller;
+    private Animator animator;
 
-  // Update is called once per frame
-  void Update()
-  {
-    movement = Input.GetAxisRaw("Horizontal");
-    verticalMovement = Input.GetAxisRaw("Vertical");
-
-    if (!facingRight && movement > 0)
+    private void Start()
     {
-      this.Flip();
-    }
-    else if (facingRight && movement < 0)
-    {
-      this.Flip();
+      this.controller = this.GetComponent<CharacterController2D>();
+      this.animator = this.GetComponent<Animator>();
     }
 
-    if (Input.GetKeyDown(KeyCode.C))
+    public void Respawn()
     {
-      //laptop.SendLocalData("192.168.0.101", "Hello, World");
+      this.controller.Die();
     }
 
-    if (Input.GetKeyDown(KeyCode.S))
+    public void Die()
     {
-      //Device[] devices = scanner.ScanWifiDevices(scannerRange);
-      //foreach (Device d in devices)
-      //{
-      //  Debug.Log(d.macAddress);
-      //}
+      this.Respawn();
     }
-  }
 
-  private void FixedUpdate()
-  {
-    Vector2 targetVelocity = new Vector2(movement * speed, this.isClimbing ? verticalMovement * speed : rigidbody.velocity.y);
-    if (isClimbing)
+    public void Teleport(Vector2 position)
     {
-      rigidbody.gravityScale = 0;
+      Vector2 oldPosition = this.transform.position;
+      this.transform.position = position;
+      this.cinemachine.OnTargetObjectWarped(this.transform, position - oldPosition);
     }
-    else
+
+    public void SetRespawnPoint(Vector2 point)
     {
-      rigidbody.gravityScale = this.gravityScale;
+      this.respawnPoint = point;
     }
-    rigidbody.velocity = Vector2.SmoothDamp(rigidbody.velocity, targetVelocity, ref m_Velocity, m_MovementSmoothing);
-  }
 
-  private void Flip()
-  {
-    facingRight = !facingRight;
-    Vector3 scaler = this.transform.localScale;
-    scaler.x *= -1;
-    this.transform.localScale = scaler;
-  }
-
-  private void OnTriggerEnter2D(Collider2D collider)
-  {
-    if (collider.gameObject.tag == "Stairs")
+    public void DieAnimationComplete()
     {
-      this.isClimbing = true;
-    }
-  }
-
-  private void OnTriggerStay2D(Collider2D collider)
-  {
-    if (collider.gameObject.tag == "Stairs")
-    {
-      this.isClimbing = true;
-    }
-  }
-
-  private void OnTriggerExit2D(Collider2D collider)
-  {
-    if (collider.gameObject.tag == "Stairs")
-    {
-      this.isClimbing = false;
+      GameManager.ResetObjects();
+      this.Teleport(respawnPoint);
+      this.controller.controllerState = CharacterController2D.State.Grounded;
     }
   }
 }

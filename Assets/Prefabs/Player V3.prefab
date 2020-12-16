@@ -4858,6 +4858,7 @@ GameObject:
   - component: {fileID: 2726975351871130186}
   - component: {fileID: 2726975351871130183}
   - component: {fileID: 2726975351871130196}
+  - component: {fileID: 1379416442}
   m_Layer: 9
   m_Name: Player V3
   m_TagString: Player
@@ -5000,7 +5001,7 @@ MonoBehaviour:
   m_AirControl: 1
   m_WhatIsGround:
     serializedVersion: 2
-    m_Bits: 1335
+    m_Bits: 3383
   m_WhatIsObject:
     serializedVersion: 2
     m_Bits: 2048
@@ -5011,6 +5012,8 @@ MonoBehaviour:
   gravityScale: 3
   dashForce: 15
   dashTime: 0.1
+  currentObject: {fileID: 0}
+  grabJoint: {fileID: 0}
   isJumping: 0
   isCrouching: 0
   isGrabbing: 0
@@ -5069,3 +5072,17 @@ Animator:
   m_HasTransformHierarchy: 1
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorControllerStateOnDisable: 0
+--- !u!114 &1379416442
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2726975351871130187}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6597df127fbcde4489ea17bf3d7a615, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  respawnPoint: {x: 0, y: 0}
+  cinemachine: {fileID: 0}

@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Metroidvania Test.unity
+    guid: f2c117ac4a5c672499bfa5fa86a58d2a
   m_configObjects: {}

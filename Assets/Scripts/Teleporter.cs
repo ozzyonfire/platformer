@@ -15,6 +15,7 @@ namespace Assets.Scripts
     {
       if (isTeleporting)
       {
+        Debug.Log("Teleporting");
         Vector3 oldPosition = player.position;
         Vector3 playerOffset = oldPosition - this.transform.position;
         Vector3 newPosition = this.target.position + playerOffset;

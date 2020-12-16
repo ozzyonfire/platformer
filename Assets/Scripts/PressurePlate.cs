@@ -1,13 +1,14 @@
-﻿using System.Collections;
+﻿using Assets.Scripts;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class PressurePlate : MonoBehaviour
 {
-  public Transform block; // the corresponding block for the button
   public LayerMask interactableMask;
   private Animator animator;
   public bool activated = false;
+  public List<Gate> gates;
 
   // Start is called before the first frame update
   void Start()
@@ -21,19 +22,21 @@ public class PressurePlate : MonoBehaviour
     this.Animate();
   }
 
-  private void OnCollisionEnter2D(Collision2D collision)
+  private void OnTriggerStay2D(Collider2D collision)
   {
     if (interactableMask == (interactableMask | 1 << collision.gameObject.layer))
     {
       this.activated = true;
+      this.OpenGates();
     }
   }
 
-  private void OnCollisionExit2D(Collision2D collision)
+  private void OnTriggerExit2D(Collider2D collision)
   {
     if (interactableMask == (interactableMask | 1 << collision.gameObject.layer))
     {
       this.activated = false;
+      this.CloseGates();
     }
   }
 
@@ -45,6 +48,22 @@ public class PressurePlate : MonoBehaviour
     } else
     {
       animator.Play("Idle");
+    }
+  }
+
+  void OpenGates()
+  {
+    foreach (Gate gate in gates)
+    {
+      gate.Open();
+    }
+  }
+
+  void CloseGates()
+  {
+    foreach (Gate gate in gates)
+    {
+      gate.Close();
     }
   }
 }

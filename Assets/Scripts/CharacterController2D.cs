@@ -62,7 +62,7 @@ public class Timer
 
 public class CharacterController2D : MonoBehaviour
 {
-  public enum State { Grounded, Airborne, Wallsliding, Dashing }
+  public enum State { Grounded, Airborne, Wallsliding, Dashing, Dead }
   [Header("State")]
   public State controllerState;
 
@@ -82,6 +82,8 @@ public class CharacterController2D : MonoBehaviour
   private bool isDashing = false;
   [SerializeField] private float dashForce = 100f;
   private float dashTimer = 0;
+  [SerializeField] private int numberOfDashes = 1;                            // Number of times we can dash in the air
+  private int dashesUsed = 0;
   [SerializeField] private float dashTime = 0.5f;                             // how long should the dash last
   public GameObject currentObject;
   public FixedJoint2D grabJoint;
@@ -202,6 +204,10 @@ public class CharacterController2D : MonoBehaviour
 
   private void FixedUpdate()
   {
+    if (controllerState == State.Dead)
+    {
+      return;
+    }
     if (controllerState == State.Dashing)
     {
       dashTimer -= Time.fixedDeltaTime;
@@ -328,6 +334,7 @@ public class CharacterController2D : MonoBehaviour
         hangTimer = hangtime;
         jumpTimer -= Time.fixedDeltaTime;
         jumpsUsed = 0;
+        dashesUsed = 0;
         if (jump)
         {
           this.Jump();
@@ -475,10 +482,14 @@ public class CharacterController2D : MonoBehaviour
 
   private void Dash()
   {
-    this.controllerState = State.Dashing;
-    dashTimer = dashTime;
-    //this.m_Rigidbody2D.velocity = new Vector2(this.dashForce * (m_FacingRight ? 1 : -1), 0f);
-    this.m_Rigidbody2D.AddForce(new Vector2(this.dashForce * (m_FacingRight ? 1 : -1), 0f), ForceMode2D.Impulse);
+    if (dashesUsed < numberOfDashes)
+    {
+      dashesUsed++;
+      this.controllerState = State.Dashing;
+      dashTimer = dashTime;
+      //this.m_Rigidbody2D.velocity = new Vector2(this.dashForce * (m_FacingRight ? 1 : -1), 0f);
+      this.m_Rigidbody2D.AddForce(new Vector2(this.dashForce * (m_FacingRight ? 1 : -1), 0f), ForceMode2D.Impulse);
+    }
   }
 
   private void Flip()
@@ -551,6 +562,9 @@ public class CharacterController2D : MonoBehaviour
       case State.Dashing:
         m_Animator.Play("Dash");
         break;
+      case State.Dead:
+        m_Animator.Play("Die");
+        break;
     }
   }
 
@@ -565,5 +579,12 @@ public class CharacterController2D : MonoBehaviour
     wallJumpTimer.Update();
     jumpBufferTimer.Update();
     shortHopTimer.Update();
+  }
+
+  public void Die()
+  {
+    this.m_Rigidbody2D.velocity = Vector2.zero;
+    this.m_Rigidbody2D.gravityScale = 0f;
+    this.controllerState = State.Dead;
   }
 }

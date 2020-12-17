@@ -9,6 +9,7 @@ namespace Assets.Scripts
     public Vector2 respawnPoint;
     public Cinemachine.CinemachineVirtualCameraBase cinemachine;
     private CharacterController2D controller;
+    public CharacterController2D.State ControllerState => controller.controllerState;
     private Animator animator;
 
     private void Start()
@@ -27,6 +28,7 @@ namespace Assets.Scripts
       this.Respawn();
     }
 
+
     public void Teleport(Vector2 position)
     {
       Vector2 oldPosition = this.transform.position;
@@ -44,6 +46,11 @@ namespace Assets.Scripts
       GameManager.ResetObjects();
       this.Teleport(respawnPoint);
       this.controller.controllerState = CharacterController2D.State.Grounded;
+    }
+
+    public void Stop()
+    {
+      this.controller.Stop();
     }
   }
 }

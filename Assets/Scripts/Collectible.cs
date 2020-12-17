@@ -5,6 +5,7 @@ namespace Assets.Scripts
 {
   public class Collectible : MonoBehaviour
   {
+    public string itemName;
     private Animator animator;
 
     // Use this for initialization
@@ -24,6 +25,7 @@ namespace Assets.Scripts
     protected void Pickup()
     {
       // add to inventory
+      GameManager.Instance.AddInventory(this.itemName);
       this.animator.Play("Pickup");
     }
 

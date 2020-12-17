@@ -62,7 +62,7 @@ public class Timer
 
 public class CharacterController2D : MonoBehaviour
 {
-  public enum State { Grounded, Airborne, Wallsliding, Dashing, Dead }
+  public enum State { Grounded, Airborne, Wallsliding, Dashing, Dead, Stopped }
   [Header("State")]
   public State controllerState;
 
@@ -204,7 +204,7 @@ public class CharacterController2D : MonoBehaviour
 
   private void FixedUpdate()
   {
-    if (controllerState == State.Dead)
+    if (controllerState == State.Dead || controllerState == State.Stopped)
     {
       return;
     }
@@ -586,5 +586,10 @@ public class CharacterController2D : MonoBehaviour
     this.m_Rigidbody2D.velocity = Vector2.zero;
     this.m_Rigidbody2D.gravityScale = 0f;
     this.controllerState = State.Dead;
+  }
+
+  public void Stop()
+  {
+    this.controllerState = State.Stopped;
   }
 }
